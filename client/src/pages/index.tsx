@@ -1,23 +1,26 @@
-import { withUrqlClient } from "next-urql";
-import { createUrqlClient } from "../utils/createUrqlClient";
 import { useMeQuery, usePostsQuery } from "../generated/graphql";
 import { Layout } from "../components/Layout";
 import { Stack, Box, Heading, Text, Button, Flex } from "@chakra-ui/react";
 import NextLink from "next/link";
-import React, { useState } from "react";
+import React from "react";
 import { UpvoteSection } from "../components/UpvoteSection";
 import { PostButtons } from "../components/PostButtons";
+import { withApollo } from "../utils/withApollo";
 
 const Index = () => {
-  const [{ data: meData }] = useMeQuery();
-  const [variables, setVariables] = useState({
-    limit: 10,
-    cursor: null as null | string,
+  const { data: meData } = useMeQuery();
+
+  const { data, loading, fetchMore, variables } = usePostsQuery({
+    variables: {
+      limit: 10,
+      cursor: null,
+    },
+    notifyOnNetworkStatusChange: true,
   });
-  const [{ data, fetching }] = usePostsQuery({ variables });
-  if (!fetching && !data) {
+  if (!loading && !data) {
     return <div>your query failed for some reason</div>;
   }
+
   return (
     <Layout>
       <Flex align="center">
@@ -29,7 +32,7 @@ const Index = () => {
         </NextLink>
       </Flex>
       <br />
-      {!data && fetching ? (
+      {!data && loading ? (
         <div>loading...</div>
       ) : (
         <Stack spacing={8}>
@@ -62,13 +65,16 @@ const Index = () => {
         <Flex>
           <Button
             m="auto"
-            isLoading={fetching}
+            isLoading={loading}
             my={8}
             colorScheme="teal"
             onClick={() => {
-              setVariables({
-                limit: variables.limit,
-                cursor: data.posts.posts[data.posts.posts.length - 1].createdAt,
+              fetchMore({
+                variables: {
+                  limit: variables?.limit,
+                  cursor:
+                    data.posts.posts[data.posts.posts.length - 1].createdAt,
+                },
               });
             }}
           >
@@ -80,4 +86,4 @@ const Index = () => {
   );
 };
 
-export default withUrqlClient(createUrqlClient, { ssr: true })(Index);
+export default withApollo({ srr: true })(Index);

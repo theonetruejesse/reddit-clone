@@ -4,21 +4,21 @@ import NextLink from "next/link";
 import { useLogoutMutation, useMeQuery } from "../generated/graphql";
 import { isServer } from "../utils/isServer";
 import { AiOutlineHome } from "react-icons/ai";
-import { useRouter } from "next/router"
+import { useApolloClient } from "@apollo/client";
 
 interface NavbarProps {}
 
 export const Navbar: React.FC<NavbarProps> = ({}) => {
-  const router = useRouter()
-  const [{ fetching: logoutFetching }, logout] = useLogoutMutation();
-  const [{ data, fetching }] = useMeQuery({
-    pause: isServer(),
+  const apolloClient = useApolloClient();
+  const [logout, { loading: logoutLoading }] = useLogoutMutation();
+  const { data, loading } = useMeQuery({
+    skip: isServer(),
   });
 
   let body;
   const homeIconStyle = { fontSize: "24px" };
 
-  if (fetching) {
+  if (loading) {
     body = null;
   } else if (!data?.me) {
     body = (
@@ -38,11 +38,11 @@ export const Navbar: React.FC<NavbarProps> = ({}) => {
         <Button
           variant="link"
           mr={2}
-          onClick={ async () => {
+          onClick={async () => {
             await logout();
-            router.reload();
+            await apolloClient.resetStore();
           }}
-          isLoading={logoutFetching}
+          isLoading={logoutLoading}
         >
           logout
         </Button>

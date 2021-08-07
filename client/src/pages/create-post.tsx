@@ -4,15 +4,14 @@ import React from "react";
 import { InputField } from "../components/InputField";
 import { useRouter } from "next/router";
 import { useCreatePostMutation } from "../generated/graphql";
-import { withUrqlClient } from "next-urql";
-import { createUrqlClient } from "../utils/createUrqlClient";
 import { Layout } from "../components/Layout";
 import { useIsAuth } from "../utils/useIsAuth";
+import { withApollo } from "../utils/withApollo";
 
 const CreatePost: React.FC<{}> = ({}) => {
   const router = useRouter();
   useIsAuth();
-  const [, createPost] = useCreatePostMutation();
+  const [createPost] = useCreatePostMutation();
   return (
     <Layout variant="small">
       <Box mb="5">
@@ -21,8 +20,13 @@ const CreatePost: React.FC<{}> = ({}) => {
       <Formik
         initialValues={{ title: "", text: "" }}
         onSubmit={async (values) => {
-          const { error } = await createPost({ options: values });
-          if (!error) {
+          const { errors } = await createPost({
+            variables: { options: values },
+            update: (cache) => {
+              cache.evict({ fieldName: "posts:{}" });
+            },
+          });
+          if (!errors) {
             router.push("/");
           }
           router.back();
@@ -54,4 +58,4 @@ const CreatePost: React.FC<{}> = ({}) => {
   );
 };
 
-export default withUrqlClient(createUrqlClient)(CreatePost);
+export default withApollo({ ssr: false })(CreatePost);

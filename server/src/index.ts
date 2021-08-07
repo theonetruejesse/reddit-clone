@@ -1,88 +1,89 @@
-import "reflect-metadata";
-import { ApolloServer } from "apollo-server-express";
-import express from "express";
-import { buildSchema } from "type-graphql";
-import { COOKIE_NAME, __prod__ } from "./constants";
-import { PostResolver } from "./resolvers/post";
-import { UserResolver } from "./resolvers/user";
-import Redis from "ioredis";
-import session from "express-session";
-import connectRedis from "connect-redis";
-import { MyContext } from "./types";
-import cors from "cors";
-import { createConnection } from "typeorm";
-import { Post } from "./entities/Post";
-import { User } from "./entities/User";
-import path from "path";
-import { Upvote } from "./entities/Upvote";
-import { createUserLoader } from "./utils/createUserLoader";
-import { createUpvoteLoader } from "./utils/createUpvoteLoader";
-import "dotenv-safe/config";
+import { useMeQuery, usePostsQuery } from "../generated/graphql";
+import { Layout } from "../components/Layout";
+import { Stack, Box, Heading, Text, Button, Flex } from "@chakra-ui/react";
+import NextLink from "next/link";
+import React from "react";
+import { UpvoteSection } from "../components/UpvoteSection";
+import { PostButtons } from "../components/PostButtons";
+import { withApollo } from "../utils/withApollo";
 
-const main = async () => {
-  const conn = await createConnection({
-    type: "postgres",
-    url: process.env.DATABASE_URL,
-    logging: true,
-    // synchronize: true,
-    entities: [Post, User, Upvote],
-    migrations: [path.join(__dirname, "./migrations/*")],
+const Index = () => {
+  const { data: meData } = useMeQuery();
+
+  const { data, loading, fetchMore, variables } = usePostsQuery({
+    variables: {
+      limit: 10,
+      cursor: null,
+    },
+    notifyOnNetworkStatusChange: true,
   });
+  if (!loading && !data) {
+    return <div>your query failed for some reason</div>;
+  }
 
-  const app = express();
-
-  const RedisStore = connectRedis(session);
-  const redis = new Redis(process.env.REDIS_URL);
-
-  app.set("proxy", 1);
-
-  app.use(
-    cors({
-      origin: process.env.CORS_ORIGIN,
-      credentials: true,
-    })
+  return (
+    <Layout>
+      <Flex align="center">
+        <Heading>Reddit-Clone</Heading>
+        <NextLink href="/create-post">
+          <Button colorScheme="teal" ml="auto">
+            Create Post
+          </Button>
+        </NextLink>
+      </Flex>
+      <br />
+      {!data && loading ? (
+        <div>loading...</div>
+      ) : (
+        <Stack spacing={8}>
+          {data!.posts.posts.map((post) => (
+            <Box
+              p={5}
+              shadow="md"
+              borderWidth="1px"
+              key={post.id}
+              _hover={{ shadow: "xl" }}
+            >
+              <Flex flexDirection="row" align="center">
+                <UpvoteSection post={post} />
+                <NextLink href="/post/[id]" as={`/post/${post.id}`}>
+                  <Flex flexDirection="column">
+                    <Heading fontSize="xl">{post.title}</Heading>
+                    <Text>posted by {post.creator.username}</Text>
+                    <Text mt={4}>{post.textSnippet + "..."}</Text>
+                  </Flex>
+                </NextLink>
+                {meData?.me?.id === post.creator.id ? (
+                  <PostButtons post={post} />
+                ) : null}
+              </Flex>
+            </Box>
+          ))}
+        </Stack>
+      )}
+      {data && data.posts.hasMore ? (
+        <Flex>
+          <Button
+            m="auto"
+            isLoading={loading}
+            my={8}
+            colorScheme="teal"
+            onClick={() => {
+              fetchMore({
+                variables: {
+                  limit: variables?.limit,
+                  cursor:
+                    data.posts.posts[data.posts.posts.length - 1].createdAt,
+                },
+              });
+            }}
+          >
+            Load More
+          </Button>
+        </Flex>
+      ) : null}
+    </Layout>
   );
-
-  app.use(
-    session({
-      name: COOKIE_NAME,
-      store: new RedisStore({
-        client: redis,
-        disableTTL: true, // cookie persists forever
-        disableTouch: true, // TTL = length of session, touch = increase time by
-      }),
-      secret: process.env.SESSION_SECRET,
-      resave: false,
-      saveUninitialized: false, // does not save empty sessions
-      cookie: {
-        maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
-        httpOnly: true,
-        sameSite: "lax", //csrf, idk
-        secure: __prod__, // cookie works only in https (prod)
-
-        domain: __prod__ ? ".codeponder.com" : undefined // use custom domain, may not work
-      },
-    })
-  );
-
-  const apolloServer = new ApolloServer({
-    schema: await buildSchema({
-      resolvers: [PostResolver, UserResolver],
-      validate: false,
-    }),
-    context: ({ req, res }): MyContext => ({
-      req,
-      res,
-      redis,
-      userLoader: createUserLoader(),
-      upvoteLoader: createUpvoteLoader()
-    }),
-  });
-
-  apolloServer.applyMiddleware({ app, cors: false });
-
-  app.listen(parseInt(process.env.PORT), () => {
-    console.log("\nlistening to port 4000");
-  });
 };
-main().catch((err) => console.log(err));
+
+export default withApollo({ srr: true })(Index);

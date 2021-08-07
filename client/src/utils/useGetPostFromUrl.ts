@@ -5,7 +5,7 @@ export const useGetPostFromUrl = () => {
   const router = useRouter();
   const stringId = typeof router.query.id === "string" ? router.query.id : "";
   return usePostQuery({
-    pause: stringId === "",
+    skip: stringId === "",
     variables: {
       id: stringId,
     },

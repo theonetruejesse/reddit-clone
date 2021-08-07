@@ -12,7 +12,7 @@ interface IconsSectionProps {
 }
 
 export const PostButtons: React.FC<IconsSectionProps> = ({ post }) => {
-  const [, deletePost] = useDeletePostMutation();
+  const [deletePost] = useDeletePostMutation();
 
   return (
     <Flex ml="auto" mt="auto">
@@ -36,7 +36,12 @@ export const PostButtons: React.FC<IconsSectionProps> = ({ post }) => {
         m={2}
         icon={<DeleteIcon boxSize="18px" />}
         onClick={() => {
-          deletePost({ id: post.id });
+          deletePost({
+            variables: { id: post.id },
+            update: (cache) => {
+              cache.evict({ id: "Post:" + post.id });
+            },
+          });
         }}
         // hidden={post.creator.id !== me.id}
       />
